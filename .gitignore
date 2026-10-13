@@ -1,0 +1,4 @@
+# Runtime data created by inventory.sh
+*.csv
+*.log
+*.html
