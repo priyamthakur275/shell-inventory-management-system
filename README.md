@@ -21,6 +21,7 @@ Built as an Alternative Assessment Tool (AAT) project for the **UNIX Shell Progr
 | Generate Analytics | Total items, number of unique categories, total quantity |
 | Export to HTML | Writes the inventory as an HTML table report |
 | Backup / Restore | Automatic backup after every change, plus manual backup and one-click restore |
+| Publish to AWS | Hosts the HTML report as a static website on Amazon S3 (see below) |
 
 ### Reliability and troubleshooting
 
@@ -42,6 +43,7 @@ Built as an Alternative Assessment Tool (AAT) project for the **UNIX Shell Progr
 - Bash 3.2 or later (Linux or macOS)
 - `zenity`
 - Standard UNIX utilities: `awk`, `grep`, `cut`, `date`, `cp`, `mv`, `mktemp`
+- Optional, for publishing: [AWS CLI v2](https://aws.amazon.com/cli/)
 
 Install Zenity:
 
@@ -65,6 +67,33 @@ Data files are created in the current directory. To keep them elsewhere:
 ```bash
 INVENTORY_DATA_DIR=~/inventory ./inventory.sh
 ```
+
+## Publish the report to AWS S3
+
+`aws/deploy_report.sh` turns the current inventory into an HTML report and hosts it as a static website on Amazon S3, using the AWS CLI.
+
+```bash
+aws configure                                   # one-time: access key, secret, region
+./aws/deploy_report.sh my-inventory-report-123  # default region: ap-south-1 (Mumbai)
+```
+
+The script:
+
+1. Checks that the AWS CLI is installed and the credentials are valid (`aws sts get-caller-identity`).
+2. Generates `index.html` from `inventory.csv`, reusing the HTML generator in `inventory.sh`.
+3. Creates the bucket if it doesn't exist, handling the `us-east-1` region rule.
+4. Applies a public-read bucket policy and enables static website hosting.
+5. Uploads the report and prints the website URL.
+
+Every step is logged with a timestamp to `deploy.log` and fails with a clear message. Re-run it after changing the inventory to update the live page.
+
+To clean up and avoid any charges:
+
+```bash
+./aws/deploy_report.sh --delete my-inventory-report-123
+```
+
+The IAM user needs S3 permissions (for a personal test account, `AmazonS3FullAccess`). S3 static hosting is covered by the AWS Free Tier.
 
 ## Data format
 
@@ -90,16 +119,19 @@ Files created at runtime:
 The test suite runs without a display. A mock `zenity` placed first on `PATH` replays scripted answers, so every function is exercised headlessly.
 
 ```bash
-bash tests/run_tests.sh
+bash tests/run_tests.sh      # inventory features
+bash tests/test_deploy.sh    # AWS deployment script, using a mock AWS CLI
 ```
 
-It covers adding, validation, updating, searching, removing, analytics, HTML export (including escaping), backup and restore, and cancelled dialogs. GitHub Actions runs the tests and [ShellCheck](https://www.shellcheck.net/) on every push.
+The inventory suite covers adding, validation, updating, searching, removing, analytics, HTML export (including escaping), backup and restore, and cancelled dialogs. GitHub Actions runs the tests and [ShellCheck](https://www.shellcheck.net/) on every push.
 
 ## Project structure
 
 ```
 inventory.sh            Main script (all functions + menu loop)
+aws/deploy_report.sh    Publishes the HTML report to an S3 static website
 tests/run_tests.sh      Headless test suite with a mock zenity
+tests/test_deploy.sh    Deployment tests with a mock AWS CLI
 docs/screenshots/       Screenshots from the project report
 .github/workflows/      CI: ShellCheck + tests
 ```
